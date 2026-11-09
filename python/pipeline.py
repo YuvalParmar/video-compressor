@@ -23,6 +23,8 @@ def load_native_codec(bandwidth_kbps: int) -> Any:
         ) from exc
     settings = native.CodecSettings()
     settings.bandwidth_kbps = bandwidth_kbps
+    settings.target_fps = 60
+    settings.roi_bandwidth_percent = 90
     return native.CodecEngine(settings)
 
 

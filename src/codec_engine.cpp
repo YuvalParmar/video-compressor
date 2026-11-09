@@ -9,7 +9,9 @@
 namespace semantic_codec {
 
 CodecEngine::CodecEngine(CodecSettings settings) : settings_(settings) {
-    if (settings_.bandwidth_kbps <= 0 || settings_.roi_quality < 1 ||
+    if (settings_.bandwidth_kbps <= 0 || settings_.target_fps <= 0 ||
+        settings_.roi_bandwidth_percent < 50 || settings_.roi_bandwidth_percent > 100 ||
+        settings_.roi_quality < 1 ||
         settings_.roi_quality > 100 || settings_.background_quality < 1 ||
         settings_.background_quality > 100 || settings_.background_block_size < 2) {
         throw std::invalid_argument("invalid codec settings");
@@ -17,9 +19,14 @@ CodecEngine::CodecEngine(CodecSettings settings) : settings_(settings) {
 }
 
 std::size_t CodecEngine::frame_budget_bytes() const {
-    // The demo budget is application-level: kbps divided by the target 30 FPS.
+    // The demo budget is application-level: kbps divided by the configured FPS.
     return std::max<std::size_t>(1, static_cast<std::size_t>(
-        std::floor(settings_.bandwidth_kbps * 1000.0 / 8.0 / 30.0)));
+        std::floor(settings_.bandwidth_kbps * 1000.0 / 8.0 / settings_.target_fps)));
+}
+
+std::size_t CodecEngine::roi_budget_bytes() const {
+    return std::max<std::size_t>(
+        1, frame_budget_bytes() * static_cast<std::size_t>(settings_.roi_bandwidth_percent) / 100);
 }
 
 std::vector<std::uint8_t> CodecEngine::encode_jpeg(const cv::Mat& image, int quality) const {
@@ -79,25 +86,21 @@ ProcessResult CodecEngine::process(const cv::Mat& frame,
 
     std::vector<std::uint8_t> selected_roi = roi_encoded;
     std::vector<std::uint8_t> selected_background = background_encoded;
-    if (selected_roi.size() + selected_background.size() > budget) {
-        const std::size_t background_budget =
-            budget > settings_.minimum_roi_bytes
-                ? budget - static_cast<std::size_t>(settings_.minimum_roi_bytes)
-                : 1;
-        if (selected_background.size() > background_budget) {
-            selected_background.resize(background_budget);
-        }
-        if (selected_roi.size() + selected_background.size() > budget) {
-            selected_roi.resize(std::min(selected_roi.size(),
-                                         budget - selected_background.size()));
-        }
+    // Preserve the ROI reservation by repeatedly lowering JPEG quality. JPEG
+    // packets are never truncated because truncated packets cannot be decoded.
+    const std::size_t roi_budget = std::min(
+        frame_budget_bytes(),
+        std::max<std::size_t>(
+            roi_budget_bytes(), static_cast<std::size_t>(settings_.minimum_roi_bytes)));
+    for (int quality = settings_.roi_quality; quality >= 10 &&
+         selected_roi.size() > roi_budget; quality -= 10) {
+        selected_roi = encode_jpeg(roi, quality);
     }
-
-    // JPEG truncation is not decodable; use quality reduction as the final
-    // budget fallback before using a valid degraded frame.
-    if (selected_roi.size() < 32 || selected_background.size() < 32) {
-        selected_roi = encode_jpeg(roi, std::max(10, settings_.roi_quality / 2));
-        selected_background = encode_jpeg(background, 10);
+    const std::size_t background_budget = budget > selected_roi.size()
+        ? budget - selected_roi.size() : 1;
+    for (int quality = settings_.background_quality; quality >= 5 &&
+         selected_background.size() > background_budget; quality -= 5) {
+        selected_background = encode_jpeg(background, quality);
     }
 
     cv::Mat decoded_roi = decode_jpeg(selected_roi);

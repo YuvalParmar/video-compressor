@@ -8,6 +8,8 @@ namespace semantic_codec {
 
 struct CodecSettings {
     int bandwidth_kbps = 10;
+    int target_fps = 60;
+    int roi_bandwidth_percent = 90;
     int roi_quality = 85;
     int background_quality = 18;
     int background_block_size = 12;
@@ -38,6 +40,7 @@ private:
     cv::Mat decode_jpeg(const std::vector<std::uint8_t>& bytes) const;
     cv::Mat degrade_background(const cv::Mat& frame) const;
     std::size_t frame_budget_bytes() const;
+    std::size_t roi_budget_bytes() const;
 };
 
 }  // namespace semantic_codec

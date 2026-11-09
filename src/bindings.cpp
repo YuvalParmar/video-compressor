@@ -50,6 +50,8 @@ PYBIND11_MODULE(semantic_codec, module) {
     py::class_<CodecSettings>(module, "CodecSettings")
         .def(py::init<>())
         .def_readwrite("bandwidth_kbps", &CodecSettings::bandwidth_kbps)
+        .def_readwrite("target_fps", &CodecSettings::target_fps)
+        .def_readwrite("roi_bandwidth_percent", &CodecSettings::roi_bandwidth_percent)
         .def_readwrite("roi_quality", &CodecSettings::roi_quality)
         .def_readwrite("background_quality", &CodecSettings::background_quality)
         .def_readwrite("background_block_size", &CodecSettings::background_block_size)
