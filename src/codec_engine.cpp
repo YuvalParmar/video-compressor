@@ -5,6 +5,7 @@
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 #include <stdexcept>
+#include <utility>
 
 namespace semantic_codec {
 
@@ -32,11 +33,41 @@ std::size_t CodecEngine::roi_budget_bytes() const {
 std::vector<std::uint8_t> CodecEngine::encode_jpeg(const cv::Mat& image, int quality) const {
     std::vector<std::uint8_t> encoded;
     std::vector<int> params{cv::IMWRITE_JPEG_QUALITY, quality,
-                            cv::IMWRITE_JPEG_OPTIMIZE, 1};
+                            // Huffman optimization is substantially slower and
+                            // is not worth its small size reduction here.
+                            cv::IMWRITE_JPEG_OPTIMIZE, 0};
     if (!cv::imencode(".jpg", image, encoded, params)) {
         throw std::runtime_error("OpenCV failed to encode JPEG");
     }
     return encoded;
+}
+
+std::vector<std::uint8_t> CodecEngine::encode_jpeg_with_budget(
+    const cv::Mat& image, int max_quality, int min_quality,
+    std::size_t budget) const {
+    auto best = encode_jpeg(image, min_quality);
+    if (best.size() > budget) {
+        return best;
+    }
+
+    auto high = encode_jpeg(image, max_quality);
+    if (high.size() <= budget) {
+        return high;
+    }
+
+    int low_quality = min_quality + 1;
+    int high_quality = max_quality - 1;
+    while (low_quality <= high_quality) {
+        const int quality = low_quality + (high_quality - low_quality) / 2;
+        auto candidate = encode_jpeg(image, quality);
+        if (candidate.size() <= budget) {
+            best = std::move(candidate);
+            low_quality = quality + 1;
+        } else {
+            high_quality = quality - 1;
+        }
+    }
+    return best;
 }
 
 cv::Mat CodecEngine::decode_jpeg(const std::vector<std::uint8_t>& bytes) const {
@@ -81,27 +112,19 @@ ProcessResult CodecEngine::process(const cv::Mat& frame,
     cv::Mat background = degrade_background(frame);
     cv::Mat roi(frame.size(), frame.type(), cv::Scalar::all(0));
     frame.copyTo(roi, importance_mask);
-    const auto roi_encoded = encode_jpeg(roi, settings_.roi_quality);
-    const auto background_encoded = encode_jpeg(background, settings_.background_quality);
 
-    std::vector<std::uint8_t> selected_roi = roi_encoded;
-    std::vector<std::uint8_t> selected_background = background_encoded;
-    // Preserve the ROI reservation by repeatedly lowering JPEG quality. JPEG
-    // packets are never truncated because truncated packets cannot be decoded.
     const std::size_t roi_budget = std::min(
         frame_budget_bytes(),
         std::max<std::size_t>(
             roi_budget_bytes(), static_cast<std::size_t>(settings_.minimum_roi_bytes)));
-    for (int quality = settings_.roi_quality; quality >= 10 &&
-         selected_roi.size() > roi_budget; quality -= 10) {
-        selected_roi = encode_jpeg(roi, quality);
-    }
+    // JPEG packets are never truncated because truncated packets cannot be
+    // decoded. A binary quality search avoids up to eight redundant encodes.
+    auto selected_roi = encode_jpeg_with_budget(
+        roi, settings_.roi_quality, 10, roi_budget);
     const std::size_t background_budget = budget > selected_roi.size()
         ? budget - selected_roi.size() : 1;
-    for (int quality = settings_.background_quality; quality >= 5 &&
-         selected_background.size() > background_budget; quality -= 5) {
-        selected_background = encode_jpeg(background, quality);
-    }
+    auto selected_background = encode_jpeg_with_budget(
+        background, settings_.background_quality, 5, background_budget);
 
     cv::Mat decoded_roi = decode_jpeg(selected_roi);
     cv::Mat decoded_background = decode_jpeg(selected_background);

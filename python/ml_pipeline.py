@@ -27,6 +27,13 @@ class SemanticMaskPipeline:
         self.input_size = input_size
         self.confidence_threshold = confidence_threshold
         self.dilation = max(0, dilation)
+        self._dilation_kernel = (
+            cv2.getStructuringElement(
+                cv2.MORPH_ELLIPSE, (self.dilation, self.dilation)
+            )
+            if self.dilation
+            else None
+        )
 
     def infer(self, frame: np.ndarray) -> np.ndarray:
         if frame.ndim != 3 or frame.shape[2] != 3 or frame.dtype != np.uint8:
@@ -39,12 +46,9 @@ class SemanticMaskPipeline:
         self.net.setInput(blob)
         outputs = self.net.forward()
         mask = self._decode_output(outputs, (height, width))
-        if self.dilation:
-            kernel = cv2.getStructuringElement(
-                cv2.MORPH_ELLIPSE, (self.dilation, self.dilation)
-            )
-            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-            mask = cv2.dilate(mask, kernel, iterations=1)
+        if self._dilation_kernel is not None:
+            mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, self._dilation_kernel)
+            mask = cv2.dilate(mask, self._dilation_kernel, iterations=1)
         return np.ascontiguousarray(mask, dtype=np.uint8)
 
     def _decode_output(self, output: np.ndarray, size: tuple[int, int]) -> np.ndarray:

@@ -145,7 +145,12 @@ class FrameAssembler:
                 self.dropped_frames += 1
             self._pending[header.frame_sequence] = (timestamp, {}, header.packet_count, 0)
         created, packets, packet_count, roi_packets = self._pending[header.frame_sequence]
-        packets.setdefault(header.packet_index, payload)
+        if header.packet_count != packet_count:
+            self.dropped_packets += 1
+            return None
+        if header.packet_index in packets:
+            return None
+        packets[header.packet_index] = payload
         if header.is_roi:
             roi_packets += 1
         self._pending[header.frame_sequence] = (created, packets, packet_count, roi_packets)

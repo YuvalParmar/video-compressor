@@ -83,6 +83,15 @@ frame at low quality; the semantic path uses a high-quality detected ROI and
 pixelated, low-quality background. The UI reports actual encoded bytes rather
 than treating a quality setting as a bitrate guarantee.
 
+## Performance and reliability notes
+
+The native codec releases the Python GIL during frame processing, uses a bounded
+JPEG-quality search for each byte budget, and avoids JPEG Huffman optimization
+because its CPU cost is not worthwhile for this low-latency stream. The mask
+pipeline reuses its morphology kernel across frames. UDP assembly rejects
+inconsistent or duplicate packets and evicts incomplete frames after the
+configured timeout, keeping latency bounded instead of accumulating retries.
+
 ## Tests
 
 ```powershell

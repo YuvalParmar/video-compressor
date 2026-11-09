@@ -14,7 +14,7 @@ from .ml_pipeline import SemanticMaskPipeline
 from .video_source import read_video
 
 
-def load_native_codec(bandwidth_kbps: int) -> Any:
+def load_native_codec(config: PipelineConfig | int) -> Any:
     try:
         native = importlib.import_module("semantic_codec")
     except ImportError as exc:
@@ -22,14 +22,17 @@ def load_native_codec(bandwidth_kbps: int) -> Any:
             "The native codec is not built. Run scripts\\build_extension.ps1 first."
         ) from exc
     settings = native.CodecSettings()
-    settings.bandwidth_kbps = bandwidth_kbps
-    settings.target_fps = 60
-    settings.roi_bandwidth_percent = 90
+    if isinstance(config, int):
+        settings.bandwidth_kbps = config
+    else:
+        settings.bandwidth_kbps = config.bandwidth_kbps
+        settings.target_fps = config.target_fps
+        settings.roi_bandwidth_percent = config.roi_bandwidth_percent
     return native.CodecEngine(settings)
 
 
 def process_video(video_path: str | Path, config: PipelineConfig) -> tuple[np.ndarray, np.ndarray, dict[str, float]]:
-    codec = load_native_codec(config.bandwidth_kbps)
+    codec = load_native_codec(config)
     segmenter = SemanticMaskPipeline(
         config.model_path,
         input_size=(config.inference_width, config.inference_height),

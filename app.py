@@ -43,8 +43,8 @@ def run_demo(video: str, bandwidth_kbps: int, confidence: float, max_frames: int
         max_frames=int(max_frames),
     )
     baseline, semantic, metrics = process_video(Path(video), config)
-    metrics["target_fps"] = 60.0
-    metrics["roi_bandwidth_percent"] = 90.0
+    metrics["target_fps"] = float(config.target_fps)
+    metrics["roi_bandwidth_percent"] = float(config.roi_bandwidth_percent)
     return baseline, semantic, _feed_report(metrics)
 
 

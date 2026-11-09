@@ -37,6 +37,9 @@ public:
 private:
     CodecSettings settings_;
     std::vector<std::uint8_t> encode_jpeg(const cv::Mat& image, int quality) const;
+    std::vector<std::uint8_t> encode_jpeg_with_budget(
+        const cv::Mat& image, int max_quality, int min_quality,
+        std::size_t budget) const;
     cv::Mat decode_jpeg(const std::vector<std::uint8_t>& bytes) const;
     cv::Mat degrade_background(const cv::Mat& frame) const;
     std::size_t frame_budget_bytes() const;

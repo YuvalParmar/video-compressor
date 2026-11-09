@@ -37,3 +37,13 @@ def test_incomplete_frames_expire_instead_of_accumulating_latency():
 def test_invalid_packet_count_is_rejected():
     with pytest.raises(ValueError):
         DatagramHeader(1, 0, 1, 0, 0, 0).encode()
+
+
+def test_duplicate_packet_does_not_change_roi_count():
+    packets = FramePacketizer(mtu=128).packetize(b"x" * 200, sequence=3, roi=True)
+    assembler = FrameAssembler()
+    assert assembler.add_datagram(packets[0]) is None
+    assert assembler.add_datagram(packets[0]) is None
+    result = assembler.add_datagram(packets[1])
+    assert result is not None
+    assert result.roi_packets == result.packet_count
