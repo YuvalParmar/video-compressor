@@ -14,13 +14,13 @@ CodecEngine::CodecEngine(CodecSettings settings) : settings_(settings) {
         settings_.roi_bandwidth_percent < 50 || settings_.roi_bandwidth_percent > 100 ||
         settings_.roi_quality < 1 ||
         settings_.roi_quality > 100 || settings_.background_quality < 1 ||
-        settings_.background_quality > 100 || settings_.background_block_size < 2) {
+        settings_.background_quality > 100 || settings_.background_block_size < 2 ||
+        settings_.background_blur_strength < 0) {
         throw std::invalid_argument("invalid codec settings");
     }
 }
 
 std::size_t CodecEngine::frame_budget_bytes() const {
-    // The demo budget is application-level: kbps divided by the configured FPS.
     return std::max<std::size_t>(1, static_cast<std::size_t>(
         std::floor(settings_.bandwidth_kbps * 1000.0 / 8.0 / settings_.target_fps)));
 }
@@ -33,8 +33,6 @@ std::size_t CodecEngine::roi_budget_bytes() const {
 std::vector<std::uint8_t> CodecEngine::encode_jpeg(const cv::Mat& image, int quality) const {
     std::vector<std::uint8_t> encoded;
     std::vector<int> params{cv::IMWRITE_JPEG_QUALITY, quality,
-                            // Huffman optimization is substantially slower and
-                            // is not worth its small size reduction here.
                             cv::IMWRITE_JPEG_OPTIMIZE, 0};
     if (!cv::imencode(".jpg", image, encoded, params)) {
         throw std::runtime_error("OpenCV failed to encode JPEG");
@@ -79,14 +77,28 @@ cv::Mat CodecEngine::decode_jpeg(const std::vector<std::uint8_t>& bytes) const {
 }
 
 cv::Mat CodecEngine::degrade_background(const cv::Mat& frame) const {
+    // Aggressive spatial degradation for non-essential regions. Combines
+    // block downsampling (pixelation) with an optional Gaussian blur pass
+    // so background detail is minimized for bandwidth savings while the
+    // focal subject stays crisp at full resolution.
     const int block = settings_.background_block_size;
     const cv::Size reduced(std::max(1, frame.cols / block),
                            std::max(1, frame.rows / block));
     cv::Mat small;
     cv::resize(frame, small, reduced, 0, 0, cv::INTER_AREA);
-    cv::Mat degraded;
-    cv::resize(small, degraded, frame.size(), 0, 0, cv::INTER_NEAREST);
-    return degraded;
+    cv::Mat pixelated;
+    cv::resize(small, pixelated, frame.size(), 0, 0, cv::INTER_NEAREST);
+
+    if (settings_.background_blur_strength > 0) {
+        // Kernel size must be odd and positive.
+        int ksize = settings_.background_blur_strength;
+        if (ksize % 2 == 0) ++ksize;
+        if (ksize > frame.cols || ksize > frame.rows) {
+            ksize = std::max(1, std::min(frame.cols, frame.rows) | 1);
+        }
+        cv::GaussianBlur(pixelated, pixelated, cv::Size(ksize, ksize), 0);
+    }
+    return pixelated;
 }
 
 ProcessResult CodecEngine::process(const cv::Mat& frame,
@@ -107,9 +119,14 @@ ProcessResult CodecEngine::process(const cv::Mat& frame,
     result.baseline_bytes = baseline_bytes.size();
     result.baseline = decode_jpeg(baseline_bytes);
 
+    // Feathered mask boundary for smooth composite between ROI and degraded
+    // background. The ROI is copied at full source resolution — no
+    // downscaling, no quality loss — so focal subjects remain crisp.
     cv::Mat softened_mask;
     cv::GaussianBlur(importance_mask, softened_mask, cv::Size(0, 0), 1.5);
     cv::Mat background = degrade_background(frame);
+
+    // Full-resolution ROI crop — encoded separately at high quality.
     cv::Mat roi(frame.size(), frame.type(), cv::Scalar::all(0));
     frame.copyTo(roi, importance_mask);
 
@@ -117,8 +134,6 @@ ProcessResult CodecEngine::process(const cv::Mat& frame,
         frame_budget_bytes(),
         std::max<std::size_t>(
             roi_budget_bytes(), static_cast<std::size_t>(settings_.minimum_roi_bytes)));
-    // JPEG packets are never truncated because truncated packets cannot be
-    // decoded. A binary quality search avoids up to eight redundant encodes.
     auto selected_roi = encode_jpeg_with_budget(
         roi, settings_.roi_quality, 10, roi_budget);
     const std::size_t background_budget = budget > selected_roi.size()

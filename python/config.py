@@ -10,6 +10,10 @@ class PipelineConfig:
     inference_height: int = 320
     confidence_threshold: float = 0.35
     roi_dilation: int = 7
+    background_block_size: int = 14
+    background_blur_strength: int = 25
+    roi_quality: int = 92
+    background_quality: int = 20
     max_frames: int = 180
     display_fps: float = 15.0
     model_path: str = "models/semantic.onnx"
@@ -25,3 +29,11 @@ class PipelineConfig:
             raise ValueError("confidence_threshold must be between 0 and 1")
         if self.roi_dilation < 0 or self.max_frames <= 0:
             raise ValueError("roi_dilation must be non-negative and max_frames positive")
+        if self.background_block_size < 2:
+            raise ValueError("background_block_size must be at least 2")
+        if self.background_blur_strength < 0:
+            raise ValueError("background_blur_strength must be non-negative")
+        if not 1 <= self.roi_quality <= 100:
+            raise ValueError("roi_quality must be between 1 and 100")
+        if not 1 <= self.background_quality <= 100:
+            raise ValueError("background_quality must be between 1 and 100")

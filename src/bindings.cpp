@@ -55,6 +55,7 @@ PYBIND11_MODULE(semantic_codec, module) {
         .def_readwrite("roi_quality", &CodecSettings::roi_quality)
         .def_readwrite("background_quality", &CodecSettings::background_quality)
         .def_readwrite("background_block_size", &CodecSettings::background_block_size)
+        .def_readwrite("background_blur_strength", &CodecSettings::background_blur_strength)
         .def_readwrite("minimum_roi_bytes", &CodecSettings::minimum_roi_bytes)
         .def_readwrite("max_queue_frames", &CodecSettings::max_queue_frames);
 

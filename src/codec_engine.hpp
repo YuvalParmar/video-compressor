@@ -10,9 +10,10 @@ struct CodecSettings {
     int bandwidth_kbps = 10;
     int target_fps = 60;
     int roi_bandwidth_percent = 90;
-    int roi_quality = 85;
-    int background_quality = 18;
-    int background_block_size = 12;
+    int roi_quality = 92;
+    int background_quality = 20;
+    int background_block_size = 14;
+    int background_blur_strength = 25;
     int minimum_roi_bytes = 256;
     int max_queue_frames = 2;
 };

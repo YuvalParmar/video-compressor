@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel", "pybind11>=2.11"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "semantic-live-codec"
-version = "0.1.0"
-description = "CPU-first semantic video compression demo"
+name = "focusstream"
+version = "0.2.0"
+description = "CPU-first focus-aware video compression for slow connections"
 requires-python = ">=3.10"
 dependencies = [
   "gradio>=4.0",

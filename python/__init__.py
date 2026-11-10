@@ -1,1 +1,1 @@
-"""Python orchestration package for the semantic live codec."""
+"""Python orchestration package for FocusStream."""

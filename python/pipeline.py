@@ -28,10 +28,16 @@ def load_native_codec(config: PipelineConfig | int) -> Any:
         settings.bandwidth_kbps = config.bandwidth_kbps
         settings.target_fps = config.target_fps
         settings.roi_bandwidth_percent = config.roi_bandwidth_percent
+        settings.roi_quality = config.roi_quality
+        settings.background_quality = config.background_quality
+        settings.background_block_size = config.background_block_size
+        settings.background_blur_strength = config.background_blur_strength
     return native.CodecEngine(settings)
 
 
-def process_video(video_path: str | Path, config: PipelineConfig) -> tuple[np.ndarray, np.ndarray, dict[str, float]]:
+def process_video(
+    video_path: str | Path, config: PipelineConfig
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, float]]:
     codec = load_native_codec(config)
     segmenter = SemanticMaskPipeline(
         config.model_path,
@@ -41,6 +47,7 @@ def process_video(video_path: str | Path, config: PipelineConfig) -> tuple[np.nd
     )
     semantic_frames: list[np.ndarray] = []
     baseline_frames: list[np.ndarray] = []
+    mask_frames: list[np.ndarray] = []
     result_metrics: list[dict[str, float]] = []
     masks: list[np.ndarray] = []
     started = time.perf_counter()
@@ -49,14 +56,22 @@ def process_video(video_path: str | Path, config: PipelineConfig) -> tuple[np.nd
         result = codec.process(frame, mask)
         baseline_frames.append(cv2.cvtColor(result["baseline"], cv2.COLOR_BGR2RGB))
         semantic_frames.append(cv2.cvtColor(result["semantic"], cv2.COLOR_BGR2RGB))
+        mask_frames.append(cv2.cvtColor(result["mask"], cv2.COLOR_GRAY2RGB))
         masks.append(result["mask"])
         result_metrics.append({
             "semantic_bytes": float(result["semantic_bytes"]),
             "roi_bytes": float(result["roi_bytes"]),
+            "baseline_bytes": float(result["baseline_bytes"]),
+            "background_bytes": float(result["background_bytes"]),
             "frame_dropped": float(result["frame_dropped"]),
         })
     if not semantic_frames:
         raise ValueError("The selected video contains no readable frames")
     metrics = summarize(result_metrics, masks)
     metrics["processing_fps"] = len(semantic_frames) / max(time.perf_counter() - started, 1e-6)
-    return np.concatenate(baseline_frames, axis=1), np.concatenate(semantic_frames, axis=1), metrics
+    return (
+        np.concatenate(baseline_frames, axis=1),
+        np.concatenate(semantic_frames, axis=1),
+        np.concatenate(mask_frames, axis=1),
+        metrics,
+    )
