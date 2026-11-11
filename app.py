@@ -8,6 +8,7 @@ import gradio as gr
 
 from python.config import PipelineConfig
 from python.pipeline import process_video
+from python.samples import SAMPLES_DIR, ensure_samples
 
 
 def _metric(value: Any, suffix: str = "") -> str:
@@ -81,6 +82,65 @@ def run_demo(
     baseline, semantic, mask_viz, metrics = process_video(Path(video), config)
     metrics["target_fps"] = float(config.target_fps)
     return baseline, semantic, mask_viz, _metrics_panel(metrics)
+
+
+PRESETS = {
+    "portrait_call": {
+        "label": "Portrait call",
+        "desc": "A face-centric video call scene.",
+        "scenario": "Video calls over weak Wi-Fi",
+        "bandwidth": 50,
+        "blur": 20,
+        "sharpness": 85,
+        "frames": 90,
+    },
+    "outdoor_action": {
+        "label": "Outdoor action",
+        "desc": "Multiple moving subjects against a busy background.",
+        "scenario": "Mobile streaming on cellular data",
+        "bandwidth": 200,
+        "blur": 35,
+        "sharpness": 70,
+        "frames": 90,
+    },
+    "extreme_low": {
+        "label": "Extreme low-light",
+        "desc": "Minimal detail, low-bandwidth stress test.",
+        "scenario": "Hotel Wi-Fi or congested hotspots",
+        "bandwidth": 10,
+        "blur": 30,
+        "sharpness": 60,
+        "frames": 45,
+    },
+    "balanced": {
+        "label": "Balanced scene",
+        "desc": "Several subjects with moderate background detail.",
+        "scenario": "Standard home internet",
+        "bandwidth": 500,
+        "blur": 15,
+        "sharpness": 80,
+        "frames": 120,
+    },
+}
+
+
+def _load_preset(preset_key: str):
+    """Return the sample video path and slider values for a preset key."""
+    preset = PRESETS.get(preset_key)
+    if preset is None:
+        raise gr.Error("Unknown preset selected.")
+    video_path = SAMPLES_DIR / f"{preset_key}.mp4"
+    if not video_path.is_file():
+        ensure_samples()
+    if not video_path.is_file():
+        raise gr.Error(f"Sample video could not be generated: {video_path}")
+    return (
+        str(video_path),
+        preset["bandwidth"],
+        preset["blur"],
+        preset["sharpness"],
+        preset["frames"],
+    )
 
 
 CSS = """
@@ -601,12 +661,62 @@ body, .gradio-container {
 /* ---------- Section spacing helper ---------- */
 .fs-divider { height: 1px; background: var(--line-soft); margin: 80px 0; border: none; }
 
+/* ---------- Preset gallery ---------- */
+.fs-gallery {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+  margin-bottom: 40px;
+}
+.fs-gallery-item {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.3s cubic-bezier(0.2,0.8,0.2,1), box-shadow 0.3s;
+  cursor: pointer;
+  text-align: left;
+  padding: 0;
+  font-family: inherit;
+  width: 100%;
+}
+.fs-gallery-item:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}
+.fs-gallery-thumb {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  display: block;
+  background: var(--surface-2);
+}
+.fs-gallery-body { padding: 18px 20px 22px; }
+.fs-gallery-label {
+  font-size: 15px; font-weight: 600; letter-spacing: -0.01em;
+  margin: 0 0 4px; color: var(--ink);
+}
+.fs-gallery-desc {
+  font-size: 12px; color: var(--muted); line-height: 1.5;
+  margin: 0 0 10px;
+}
+.fs-gallery-tag {
+  display: inline-block;
+  font: 500 10px 'JetBrains Mono', monospace;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 4px 10px; border-radius: 980px;
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 900px) {
   .gradio-container { padding: 0 20px 60px !important; }
   .fs-nav-links { display: none; }
   .fs-hero { padding: 48px 0 36px; }
   .fs-strip { grid-template-columns: 1fr; }
+  .fs-gallery { grid-template-columns: repeat(2, 1fr); }
   .metrics-row { grid-template-columns: repeat(2, 1fr); }
   .metric-hero-value { font-size: 48px; }
   .how-grid { grid-template-columns: 1fr; }
@@ -671,8 +781,25 @@ with gr.Blocks(title="FocusStream — Smart Video Optimizer", css=CSS) as demo:
         with gr.Tab("Video Optimizer", id="optimizer"):
             gr.HTML(
                 '<div class="fs-section-head"><h2>Compare compression side by side</h2>'
-                '<p>Upload a clip, simulate a slow connection, and judge the difference between standard compression and our focus-aware codec at the same bandwidth.</p></div>'
+                '<p>Pick a preset below or upload your own clip, simulate a slow connection, and judge the difference between standard compression and our focus-aware codec at the same bandwidth.</p></div>'
             )
+
+            ensure_samples()
+            _preset_keys = list(PRESETS.keys())
+            _gallery_items = []
+            for _key in _preset_keys:
+                _thumb = SAMPLES_DIR / f"{_key}.jpg"
+                _gallery_items.append((str(_thumb), PRESETS[_key]["label"]))
+            preset_gallery = gr.Gallery(
+                value=_gallery_items,
+                label="Preset samples — click to load",
+                show_label=True,
+                columns=4,
+                height=200,
+                allow_preview=False,
+                elem_classes="fs-card",
+            )
+
             with gr.Row():
                 with gr.Column(scale=5, elem_classes="fs-card"):
                     video = gr.Video(label="Your video", sources=["upload"], height=280)
@@ -705,7 +832,22 @@ with gr.Blocks(title="FocusStream — Smart Video Optimizer", css=CSS) as demo:
             metrics_html = gr.HTML(
                 '<div class="empty-state"><div class="empty-icon">+</div>'
                 '<strong>Run the optimizer to see results</strong>'
-                '<span>Upload a video and click Optimize to compare compression strategies.</span></div>'
+                '<span>Pick a preset above or upload your own video, then click Optimize to compare compression strategies.</span></div>'
+            )
+
+            def _on_preset_select(evt: gr.SelectData):
+                idx = evt.index
+                if isinstance(idx, (list, tuple)):
+                    idx = idx[0] if idx else 0
+                idx = int(idx)
+                if idx < 0 or idx >= len(_preset_keys):
+                    raise gr.Error("Invalid preset selected.")
+                return _load_preset(_preset_keys[idx])
+
+            preset_gallery.select(
+                _on_preset_select,
+                None,
+                [video, bandwidth, blur_intensity, focal_sharpness, max_frames],
             )
             run.click(
                 run_demo,

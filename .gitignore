@@ -8,3 +8,4 @@
 build/
 *.pyd
 models/semantic.onnx
+samples/
