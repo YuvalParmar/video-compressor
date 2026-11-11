@@ -8,7 +8,6 @@ version = "0.2.0"
 description = "CPU-first focus-aware video compression for slow connections"
 requires-python = ">=3.10"
 dependencies = [
-  "gradio>=4.0",
   "numpy>=1.24",
   "opencv-python>=4.8",
 ]

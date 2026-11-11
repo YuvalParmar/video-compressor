@@ -29,8 +29,8 @@ bandwidth savings rather than promising a guaranteed rate.
 The system is intentionally layered so the UI can be swapped without touching
 the core engine:
 
-- **UI layer** (`app.py`): Gradio consumer dashboard. This is the only file
-  that needs to change if the interface is re-skinned for a different audience.
+- **UI layer** (`src/` + `src-tauri/`): React/Tauri desktop workspace. The
+  Python service exposes the existing pipeline over localhost WebSockets.
 - **Python orchestration** (`python/`): Video source, ML mask pipeline, codec
   bridge, metrics, config, UDP transport. No UI dependencies.
 - **Native C++ engine** (`src/`): ROI-aware JPEG codec with background
@@ -53,10 +53,17 @@ the core engine:
    .\scripts\build_extension.ps1
    ```
 
-5. Launch the app:
+5. Launch the desktop frontend in development:
 
    ```powershell
-   python app.py
+   npm install
+   npm run dev
+   ```
+
+   Start the local processing bridge in a second terminal:
+
+   ```powershell
+   python service.py
    ```
 
 6. For direct local streaming to another device, start a receiver:
@@ -88,10 +95,33 @@ the configured timeout, keeping latency bounded.
 python -m pytest
 ```
 
-The native extension is required for the end-to-end demo. Tests that only
+The native extension is required for end-to-end processing. Tests that only
 exercise the Python mask and metric contracts do not require model weights.
 
 ## Privacy
 
 FocusStream runs entirely on your device. No video, frames, or telemetry leave
 your machine. The ML model runs locally via OpenCV DNN on CPU.
+
+## Desktop frontend
+
+The recommended product UI is now available as a React + Tauri desktop
+foundation. The Vite frontend lives in `src/`, uses a local-first comparison
+workspace, and keeps the existing Python pipeline available through the
+WebSocket bridge in `service.py`.
+
+```powershell
+npm install
+npm run dev
+```
+
+The native Windows shell is configured in `src-tauri/`. With Rust and the Tauri
+CLI installed, `npm run tauri dev` can be added as the next packaging step.
+The bridge can be started independently with:
+
+```powershell
+python service.py
+```
+
+It listens only on `127.0.0.1:8765` and accepts an `analyze` request containing
+a local video path and compression settings.

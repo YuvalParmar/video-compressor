@@ -10,13 +10,14 @@ integrated graphics.
 
 The system uses a file-first frame source, OpenCV DNN loading a lightweight
 ONNX detector/segmenter, a Pybind11 C++ extension for zero-copy-friendly frame
-processing, and a Gradio single-page demo. The C++ layer produces both a
+processing, and a React/Tauri desktop app. The C++ layer produces both a
 conventional low-bandwidth baseline and a focus-aware result so the UI can
 compare quality under the same simulated network budget.
 
 ## Decisions and boundaries
 
-- **UI:** Gradio consumer dashboard — clean, no domain-specific terminology.
+- **UI:** React/Tauri consumer workspace — clean, tactile, no domain-specific
+  terminology.
 - **Inference:** OpenCV DNN with a lightweight ONNX model. The model adapter
   exposes a stable mask interface so the model can be replaced without
   changing the codec.
@@ -35,7 +36,7 @@ compare quality under the same simulated network budget.
   FPS, focal-area ratio, and dropped-frame count.
 - **Architecture separation:** UI, Python orchestration, and C++ engine are
   fully decoupled. Re-skinning the interface for a different audience requires
-  changes to `app.py` only.
+  changes to the frontend and service boundary only.
 - **Out of scope:** training a new model, multi-user networking, production
   deployment, authenticated streaming.
 
@@ -43,7 +44,12 @@ compare quality under the same simulated network budget.
 
 ```text
 focusstream/
-├── app.py
+├── src/
+│   ├── App.tsx
+│   ├── main.tsx
+│   └── styles.css
+├── src-tauri/
+├── service.py
 ├── README.md
 ├── pyproject.toml
 ├── requirements.txt
@@ -87,7 +93,7 @@ focusstream/
 - Morphological close/dilate for mask continuity.
 
 ### 3. Consumer UI
-- Gradio dashboard with split-screen comparison.
+- React/Tauri desktop dashboard with split-screen comparison.
 - Network simulation slider (down to 10 kbps).
 - Background blur/downscale intensity slider.
 - Focal subject sharpness slider.
