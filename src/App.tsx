@@ -51,10 +51,15 @@ function App() {
   const [compare, setCompare] = useState(64);
   const [playing, setPlaying] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const focusVideoRef = useRef<HTMLVideoElement>(null);
+  const processingTimerRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     return () => {
+      if (processingTimerRef.current !== null) {
+        window.clearInterval(processingTimerRef.current);
+      }
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
   }, [previewUrl]);
@@ -67,10 +72,14 @@ function App() {
     setStage("ready");
     setProgress(0);
     setMetrics(initialMetrics);
+    setPlaying(false);
   };
 
   const startProcessing = () => {
     if (!file || stage === "processing") return;
+    if (processingTimerRef.current !== null) {
+      window.clearInterval(processingTimerRef.current);
+    }
     setStage("processing");
     setProgress(3);
     let value = 3;
@@ -78,6 +87,7 @@ function App() {
       value += Math.round(Math.random() * 12) + 4;
       if (value >= 100) {
         window.clearInterval(timer);
+        processingTimerRef.current = null;
         setProgress(100);
         setStage("complete");
         setMetrics({
@@ -90,19 +100,34 @@ function App() {
         setProgress(value);
       }
     }, 320);
+    processingTimerRef.current = timer;
   };
 
-  const togglePlayback = () => {
-    if (!videoRef.current) return;
-    if (playing) videoRef.current.pause();
-    else void videoRef.current.play();
-    setPlaying(!playing);
+  const togglePlayback = async () => {
+    const videos = [videoRef.current, focusVideoRef.current].filter(
+      (video): video is HTMLVideoElement => video !== null,
+    );
+    if (videos.length === 0) return;
+    if (playing) {
+      videos.forEach((video) => video.pause());
+      return;
+    }
+    try {
+      await Promise.all(videos.map((video) => video.play()));
+    } catch {
+      setPlaying(false);
+    }
   };
 
   const reset = () => {
+    if (processingTimerRef.current !== null) {
+      window.clearInterval(processingTimerRef.current);
+      processingTimerRef.current = null;
+    }
     setStage("ready");
     setProgress(0);
     setMetrics(initialMetrics);
+    setPlaying(false);
   };
 
   return (
@@ -195,7 +220,7 @@ function App() {
               <div className="comparison-stage">
                 <video ref={videoRef} src={previewUrl} muted loop onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} />
                 <div className="focus-layer" style={{ clipPath: `inset(0 0 0 ${compare}%)` }}>
-                  <video src={previewUrl} muted loop />
+                  <video ref={focusVideoRef} src={previewUrl} muted loop />
                 </div>
                 <div className="comparison-divider" style={{ left: `${compare}%` }}><span /></div>
                 <div className="comparison-label label-left">Standard</div>
