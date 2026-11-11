@@ -1,0 +1,11 @@
+.pytest_cache/
+*.pyc
+*.egg-info
+.env
+*.check_cache
+*.yaml
+.cmake
+build/
+*.pyd
+models/semantic.onnx
+samples/
