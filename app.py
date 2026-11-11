@@ -1053,4 +1053,4 @@ with gr.Blocks(title="FocusStream — Smart Video Optimizer", css=CSS) as demo:
 
 
 if __name__ == "__main__":
-    demo.launch(css=CSS)
+    demo.launch(css=CSS, allowed_paths=[str(SAMPLES_DIR)])
