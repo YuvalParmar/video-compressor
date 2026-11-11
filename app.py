@@ -727,6 +727,77 @@ body, .gradio-container {
   background: var(--accent-soft);
   padding: 4px 10px; border-radius: 980px;
 }
+.demo-section {
+  margin: 0 0 40px;
+}
+.demo-section-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 0 0 18px;
+}
+.demo-section-head h3 {
+  margin: 0 0 6px;
+  color: var(--ink) !important;
+  font-size: 24px;
+  letter-spacing: -0.02em;
+}
+.demo-section-head p {
+  margin: 0;
+  color: var(--ink-2) !important;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.demo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.demo-card {
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+}
+.demo-card video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: var(--surface-2);
+}
+.demo-card-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+}
+.demo-card-body strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ink) !important;
+  font-size: 15px;
+}
+.demo-card-body span {
+  color: var(--ink-2) !important;
+  font-size: 12px;
+}
+.demo-load {
+  flex: 0 0 auto;
+  border: 1px solid var(--line) !important;
+  border-radius: 980px;
+  background: var(--surface) !important;
+  color: var(--ink) !important;
+  padding: 8px 14px;
+  font: 500 12px 'Inter', sans-serif;
+  cursor: pointer;
+}
+.demo-load:hover {
+  background: var(--surface-2) !important;
+}
 
 /* ---------- Responsive ---------- */
 @media (max-width: 900px) {
@@ -738,6 +809,9 @@ body, .gradio-container {
   .metrics-row { grid-template-columns: repeat(2, 1fr); }
   .metric-hero-value { font-size: 48px; }
   .how-grid { grid-template-columns: 1fr; }
+  .demo-grid { grid-template-columns: 1fr; }
+  .demo-section-head { display: block; }
+  .demo-section-head p { margin-top: 6px; }
 }
 """
 
@@ -803,6 +877,44 @@ with gr.Blocks(title="FocusStream — Smart Video Optimizer", css=CSS) as demo:
             )
 
             ensure_samples()
+            gr.HTML("""
+            <section class="demo-section">
+              <div class="demo-section-head">
+                <div>
+                  <h3>Start with a built-in demo</h3>
+                  <p>Preview a clip, load it into the optimizer, then compare standard and focus-aware compression.</p>
+                </div>
+              </div>
+            </section>
+            """)
+            with gr.Row(elem_classes="demo-grid"):
+                with gr.Column(elem_classes="demo-card"):
+                    gr.Video(
+                        value=str(SAMPLES_DIR / "portrait_call.mp4"),
+                        label="Portrait call demo",
+                        height=180,
+                        interactive=False,
+                    )
+                    with gr.Row(elem_classes="demo-card-body"):
+                        gr.HTML(
+                            '<div><strong>Portrait call</strong>'
+                            '<span>Subject detail over weak Wi-Fi</span></div>'
+                        )
+                        load_portrait = gr.Button("Use this demo")
+                with gr.Column(elem_classes="demo-card"):
+                    gr.Video(
+                        value=str(SAMPLES_DIR / "outdoor_action.mp4"),
+                        label="Outdoor action demo",
+                        height=180,
+                        interactive=False,
+                    )
+                    with gr.Row(elem_classes="demo-card-body"):
+                        gr.HTML(
+                            '<div><strong>Outdoor action</strong>'
+                            '<span>Moving subjects on cellular data</span></div>'
+                        )
+                        load_outdoor = gr.Button("Use this demo")
+
             _preset_keys = list(PRESETS.keys())
             _gallery_items = []
             for _key in _preset_keys:
@@ -864,6 +976,16 @@ with gr.Blocks(title="FocusStream — Smart Video Optimizer", css=CSS) as demo:
 
             preset_gallery.select(
                 _on_preset_select,
+                None,
+                [video, bandwidth, blur_intensity, focal_sharpness, max_frames],
+            )
+            load_portrait.click(
+                lambda: _load_preset("portrait_call"),
+                None,
+                [video, bandwidth, blur_intensity, focal_sharpness, max_frames],
+            )
+            load_outdoor.click(
+                lambda: _load_preset("outdoor_action"),
                 None,
                 [video, bandwidth, blur_intensity, focal_sharpness, max_frames],
             )
